@@ -1,11 +1,13 @@
 package com.secondhand.domain.login;
 
 import com.secondhand.exception.ErrorMessage;
-import com.secondhand.exception.token.TokenException;
 import com.secondhand.infrastructure.jwt.JwtProperties;
 import com.secondhand.infrastructure.jwt.JwtTokenProvider;
+import com.secondhand.infrastructure.jwt.UnAuthorizedException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -13,9 +15,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @DisplayName("JWT 발급 / 검증 테스트")
 class JwtTokenProviderTest {
 
-    private final String secretKey = "fdsfdsfgfdgfdgdgdgfdgdsfds";
-    private final JwtTokenProvider jwtProvider = new JwtTokenProvider(
-            new JwtProperties(secretKey));
+    private final String secretKey = "2901ujr9021urf0u902hf021y90fh9c210hg093hg091h3g90h30gh901hg09h01";
+    private final JwtTokenProvider jwtProvider = new JwtTokenProvider(new JwtProperties(secretKey));
 
     @DisplayName("회원의 PK가 payload로 주어지면 토큰이 생성되는데 성공한다.")
     @Test
@@ -37,7 +38,7 @@ class JwtTokenProviderTest {
 
         // when & then
         assertThatThrownBy(() -> jwtProvider.validateToken(invalidToken))
-                .isInstanceOf(TokenException.class)
+                .isInstanceOf(UnAuthorizedException.class)
                 .extracting("errorMessage").isEqualTo(ErrorMessage.INVALID_TOKEN);
     }
 
@@ -47,9 +48,10 @@ class JwtTokenProviderTest {
         // given
         String expiredToken = TokenCreator.createExpiredToken(1L);
 
+        System.out.println("expiredToken = " + expiredToken);
         // when & then
         assertThatThrownBy(() -> jwtProvider.validateToken(expiredToken))
-                .isInstanceOf(TokenException.class)
+                .isInstanceOf(UnAuthorizedException.class)
                 .extracting("errorMessage").isEqualTo(ErrorMessage.EXPIRED_TOKEN);
     }
 
@@ -57,14 +59,14 @@ class JwtTokenProviderTest {
     @Test
     void givenToken_whenExtractClaims_thenSuccess() {
         // given
-        TokenCreator tokenCreator = new TokenCreator(jwtProvider);
-        Token token = tokenCreator.createToken(1L);
+        String token = TokenCreator.createToken(1L).getAccessToken();
 
         // when
-        Long subject = jwtProvider.getSubject(token.getAccessToken());
+        Map<String, Object> claims = jwtProvider.extractClaims(token);
+
 
         // then
-        assertThat(subject.toString()).isEqualTo("1");
+        assertThat(claims.get("memberId").toString()).isEqualTo("1");
     }
 
     @DisplayName("로그아웃한 엑세스토큰이 주어지면 에러를 발생시킨다.")
