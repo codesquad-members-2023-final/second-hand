@@ -12,11 +12,8 @@ import java.lang.annotation.Target;
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
 @WebMvcTest({
-        MemberController.class,
         CategoryController.class,
-        ChatRoomController.class,
-        ProductController.class,
-        TownController.class,
+        ProductController.class
 })
 @AutoConfigureRestDocs
 public @interface DocumentationTest {
