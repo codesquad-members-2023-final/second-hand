@@ -1,10 +1,11 @@
 package com.secondhand.presentation.filter;
 
 import com.secondhand.exception.v2.ErrorMessage;
+import com.secondhand.exception.v2.UnAuthorizedException;
 import com.secondhand.infrastructure.jwt.AuthorizationExtractor;
 import com.secondhand.infrastructure.jwt.JwtTokenProvider;
-import com.secondhand.exception.v2.UnAuthorizedException;
-import com.secondhand.presentation.suport.AuthenticationContext;
+import com.secondhand.presentation.support.AuthenticationContext;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Component;
@@ -21,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+
 @Slf4j
 public class JwtFilter extends OncePerRequestFilter {
 
@@ -29,27 +31,28 @@ public class JwtFilter extends OncePerRequestFilter {
             List.of("/api/auth/**", "/api/categories");
     private final List<String> excludeGetUrlPatterns =
             List.of("/api/products/**");
+    private final JwtTokenProvider jwtTokenProvider;
+    private final AuthenticationContext authenticationContext; //이게 제대로 들어와야 하는거죠
 
-    private final JwtTokenProvider jwtProvider;
-    private final AuthenticationContext authenticationContext;
-
-    public JwtFilter(JwtTokenProvider jwtProvider, AuthenticationContext authenticationContext) {
-        this.jwtProvider = jwtProvider;
+    public JwtFilter(JwtTokenProvider jwtTokenProvider, AuthenticationContext authenticationContext) {
+        this.jwtTokenProvider = jwtTokenProvider;
         this.authenticationContext = authenticationContext;
     }
+
 
     //필터적용여뷰
     //필터링에서 제외시키고 싶은 request에서 true를 반환 하면 된다.
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         HttpMethod method = HttpMethod.resolve(request.getMethod());
-        log.debug("request.getRequestURI() = {}", request.getRequestURI());
+        log.debug(" shouldNotFilter 수행  = {}", method);
+
         if (method == HttpMethod.GET && isExcludeGetUrl(request.getRequestURI())) {
-            log.debug("shouldNotfilter = {}", authenticationContext.getMemberId());
             extractToken(request).ifPresentOrElse(
                     token -> {
-                        jwtProvider.validateToken(token);
-                        authenticationContext.setMemberId(jwtProvider.extractClaims(token));
+                        jwtTokenProvider.validateToken(token);
+                        authenticationContext.setMemberId(jwtTokenProvider.extractClaims(token));
+                        log.debug(" shouldNotFilter 수행 id  = {}", authenticationContext.getMemberId());
                     },
                     () -> authenticationContext.setMemberId(Map.of("memberId", -1L)));
             return true;
@@ -59,10 +62,8 @@ public class JwtFilter extends OncePerRequestFilter {
         // excludeUrlPatterns에 정의된 URI 패턴 중에서 현재 요청의 URI와 매치되는지를 확인합니다.
         // 만약 매치되면 필터링을 수행하지 않고, true를 반환하여 요청을 무시합니다.
         //oauth,카테고리를 제외하고 필터링 거친다
-        boolean match = excludeUrlPatterns.stream()
+        return excludeUrlPatterns.stream()
                 .anyMatch(pattern -> pathMatcher.match(pattern, request.getRequestURI()));
-        log.debug("제외되는 필터링= {}", match);
-        return match;
     }
 
     private boolean isExcludeGetUrl(String uri) {
@@ -70,12 +71,15 @@ public class JwtFilter extends OncePerRequestFilter {
                 .anyMatch(pattern -> pathMatcher.match(pattern, uri));
     }
 
+
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
 
         log.debug(" doFilter 수행");
+        log.debug(" shouldNotFilter 수행  = {}", authenticationContext);
+
         if (CorsUtils.isPreFlightRequest(request)) {
             filterChain.doFilter(request, response);
             return;
@@ -83,8 +87,8 @@ public class JwtFilter extends OncePerRequestFilter {
         String token = extractToken(request)
                 .orElseThrow(() -> new UnAuthorizedException(ErrorMessage.INVALID_AUTH_HEADER));
         //    jwtProvider.validateBlackToken(token);
-        jwtProvider.validateToken(token);
-        authenticationContext.setMemberId(jwtProvider.extractClaims(token));
+        jwtTokenProvider.validateToken(token);
+        authenticationContext.setMemberId(jwtTokenProvider.extractClaims(token));
         log.debug("검증된 회원id = {}", authenticationContext.getMemberId());
         filterChain.doFilter(request, response);
     }
