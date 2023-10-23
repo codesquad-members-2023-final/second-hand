@@ -1,0 +1,86 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [ "dev-be" ]
+env:
+  working-directory: ./be
+  DOCKER_IMAGE: gamja
+  DOCKER_REGISTRY: gamja123
+  DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+  DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up JDK 11
+        uses: actions/setup-java@v3
+        with:
+          java-version: '11'
+          distribution: 'adopt'
+
+      - run: |
+          mkdir  ./be/src/main/resources/custom
+
+          touch ./be/src/main/resources/custom/setting.yml
+          echo "${{ secrets.SETTING }}" > ./be/src/main/resources/custom/setting.yml
+          
+          
+          touch ./be/src/main/resources/application-aws.yml
+          echo "${{ secrets.APPLICATION_AWS }}" > ./be/src/main/resources/application-aws.yml
+          
+          touch ./be/src/main/resources/application-prod.yml
+          echo "${{ secrets.APPLICATION_PROD }}" > ./be/src/main/resources/application-prod.yml
+          
+          touch ./be/src/main/resources/application-auth.yml
+          echo "${{ secrets.APPLICATION_AUTH }}" > ./be/src/main/resources/application-auth.yml
+          
+           touch ./be/src/main/resources/application-auth2.yml
+          echo "${{ secrets.APPLICATION_AUTH2 }}" > ./be/src/main/resources/application-auth2.yml
+
+      - name: Gradle
+        run: |
+          chmod +x gradlew
+          ./gradlew clean build --stacktrace -x test
+        working-directory: ${{ env.working-directory }}
+
+      - name: Login to Docker Hub
+        run: |
+          docker login -u $DOCKER_USERNAME -p $DOCKER_PASSWORD
+          docker build -t $DOCKER_REGISTRY/second-hand .
+          docker push $DOCKER_REGISTRY/second-hand
+        working-directory: ${{ env.working-directory }}
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.5.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_KEY }}
+
+      - name: SSH into EC2 instance
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          working-directory: ./be
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            sudo docker image prune -a --force 
+            docker login -u $DOCKER_USERNAME -p $DOCKER_PASSWORD
+            docker pull ${{ secrets.DOCKER_REGISTRY }}/second-hand
+            docker pull ${{ secrets.DOCKER_REGISTRY }}/second-hand-nginx
+            docker-compose up -d
+            docker image prune -f

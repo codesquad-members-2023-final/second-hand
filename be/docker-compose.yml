@@ -1,0 +1,45 @@
+version: "3"
+services:
+  application:
+    build: .
+    image: gamja123/second-hand
+    container_name: was-application
+    ports:
+      - "8080:8080"
+    expose:
+      - 8080
+
+  redis:
+    image: redis:latest
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./redis/data:/data
+    command: [ "redis-server", "--bind", "0.0.0.0" ]
+    restart: always
+
+
+  frontend:
+    build: .
+    container_name: frontend
+    image: gamja123/frontend
+    ports:
+      - "3000:3000"
+
+  web:
+    image: gamja123/second-hand-nginx
+    container_name: was-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d
+    environment:
+      - REACT_APP_KAKAO_BASE_API_URL=https://dapi.kakao.com/v2/local/geo
+      - REACT_APP_KAKAO_REST_API_KEY=efc4d76a2ff43e46bcde62f659ee5daf
+      - REACT_APP_CLIENT_ID=a90a03812f7131baeb81
+      - REACT_APP_REDIRECT_URI=http://43.200.247.94:3000/auth
+      - REACT_APP_BASE_URL=http://43.200.247.94
+    depends_on:
+      - frontend
+      - application
