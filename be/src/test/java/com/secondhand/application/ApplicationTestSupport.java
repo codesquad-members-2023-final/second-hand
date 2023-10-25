@@ -7,7 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.mock.mockito.MockBean;
 
 @ApplicationTest
-public abstract class ApplicationTestSupport{
+public abstract class ApplicationTestSupport extends TestContainer {
 
     @MockBean
     protected S3Uploader s3Uploader;
