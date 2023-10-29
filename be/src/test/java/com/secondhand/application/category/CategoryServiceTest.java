@@ -6,16 +6,15 @@ import com.secondhand.service.CategoryService;
 import com.secondhand.web.dto.response.CategoryListResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 
-@DisplayName("카테고리 서비스 테스트")
+@DisplayName("카테고리 서비스 통합 테스트")
 class CategoryServiceTest extends ApplicationTestSupport {
 
-    @InjectMocks
+    @Autowired
     private CategoryService categoryService;
 
     @DisplayName("카테고리 목록을 반환한다.")
