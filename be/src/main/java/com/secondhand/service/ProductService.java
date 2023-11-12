@@ -1,6 +1,7 @@
 package com.secondhand.service;
 
 import com.secondhand.domain.categoriy.Category;
+import com.secondhand.domain.chat.repository.ChatRoomRepository;
 import com.secondhand.exception.BadRequestException;
 import com.secondhand.exception.v2.ErrorMessage;
 import com.secondhand.exception.NotUserMineProductException;
@@ -15,6 +16,7 @@ import com.secondhand.domain.product.repository.ProductRepository;
 import com.secondhand.domain.town.Town;
 import com.secondhand.web.dto.requset.ProductSaveRequest;
 import com.secondhand.web.dto.requset.ProductUpdateRequest;
+import com.secondhand.web.dto.response.ProductResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.cache.spi.support.AbstractReadWriteAccess.Item;
@@ -41,6 +43,7 @@ public class ProductService {
     private final TownService townService;
     private final MemberService memberService;
     private final ImageService imageService;
+    private final ChatRoomRepository chatRoomRepository;
 
     @Transactional
     public void save(long userId, ProductSaveRequest requestInfo, MultipartFile thumbnailImage,
@@ -93,29 +96,38 @@ public class ProductService {
         if (product.checkIsMine(userId)) {
             productRepository.delete(product);
         }
+
+        List<Image> imageUrls = imageRepository.findByProductId(productId);
+        imageService.deleteImages(imageUrls);
+
+        imageRepository.deleteByProductId(productId);
+        interestedRepository.deleteByProductId(productId);
+        productRepository.deleteById(productId);
+
+        // todo: 삭제한 상품과 관련된 채팅도 삭제하기
     }
 
-    @Transactional
-    public void changeLike(long productId, long userId) {
-        Member member = memberService.findMemberById(userId);
-        Product product = findById(productId);
-        Optional<Interested> interested = interestedRepository.findByMemberAndProduct(member,
-                product);
-        if (interested.isPresent()) {
-            log.debug("이미 좋아요 누른경우 ======================");
-            Interested existInterested = interested.get();
-            product.decreaseCountView();
-            interestedRepository.delete(existInterested);
-            existInterested.deleteInterested(existInterested, member, product);
-            return;
-        }
-        log.debug("처음 좋아요  누른경우 ======================");
-        Interested newInterested = new Interested();
-        newInterested.changeInterested(newInterested, member, product);
-        interestedRepository.save(newInterested);
-        product.increaseCountView();
-        log.debug("상품 좋아요 수 = {}", product.getCountLike());
-    }
+//    @Transactional
+//    public void changeLike(long productId, long userId) {
+//        Member member = memberService.findMemberById(userId);
+//        Product product = findById(productId);
+//        Optional<Interested> interested = interestedRepository.findByMemberIdAndProductId(userId,
+//                productId);
+//        if (interested.isPresent()) {
+//            log.debug("이미 좋아요 누른경우 ======================");
+//            Interested existInterested = interested.get();
+//            product.decreaseCountView();
+//            interestedRepository.delete(existInterested);
+//            existInterested.deleteInterested(existInterested, member, product);
+//            return;
+//        }
+//        log.debug("처음 좋아요  누른경우 ======================");
+//        Interested newInterested = new Interested();
+//        newInterested.changeInterested(newInterested, member, product);
+//        interestedRepository.save(newInterested);
+//        product.increaseCountView();
+//        log.debug("상품 좋아요 수 = {}", product.getCountLike());
+//    }
 
 
     @Transactional
@@ -127,6 +139,21 @@ public class ProductService {
             return;
         }
         throw new NotUserMineProductException();
+    }
+
+
+    public ProductResponse read(Long memberId, Long productId) {
+        Product product = findById(productId);
+
+        List<Image> images = imageRepository.findByProductId(productId);
+
+        if (!product.isSeller(memberId)) {
+            Boolean isWish = interestedRepository.existsByProductIdAndMemberId(productId, memberId);
+            Long chatRoomId = chatRoomRepository.findByProduct_IdAndBuyer_Id(productId, memberId)
+                    .orElse(null);
+            return ProductResponse.toBuyerResponse(product, images, isWish, chatRoomId);
+        }
+        return ProductResponse.toSellerResponse(product, images);
     }
 
 
